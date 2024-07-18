@@ -1,5 +1,7 @@
 import itertools
 from collections import Counter
+
+import numpy as np
 from sklearn.model_selection import train_test_split
 
 k = 3
@@ -17,14 +19,15 @@ X_train, X_test, y_train, y_test = train_test_split(vectors, labels, test_size=0
 
 
 # Function to calculate error rate
-def error_rate(predicted_labels, true_labels):
-    return sum(1 for pred, true in zip(predicted_labels, true_labels) if pred != true) / len(true_labels)
+def error_rate(tree, X, y):
+    predictions = predict_labels(tree, X)
+    return np.mean(predictions != y)
 
 
 # Function to generate specific binary trees of depth k
 def generate_trees(k):
     trees = []
-    for tree in itertools.product([0, 1], repeat=k):
+    for tree in itertools.product([0, 1], repeat=(2 ** k) - 1):
         trees.append(tree)
     return trees
 
@@ -34,17 +37,19 @@ def predict_labels(tree, X):
     predictions = []
     for vector in X:
         node = 0
-        depth = 0
-        while depth < len(tree):
+        while node < len(tree):
             if tree[node] == 0:
-                predictions.append(0)
-                break
+                node = 2 * node + 1  # go to the left child
             elif tree[node] == 1:
-                predictions.append(1)
+                node = 2 * node + 2  # go to the right child
+
+            if node >= len(tree):
                 break
-            else:
-                node = 2 * node + 1 + vector[tree[node] - 2]
-                depth += 1
+
+        if node >= len(tree) or node % 2 == 0:
+            predictions.append(0)
+        else:
+            predictions.append(1)
     return predictions
 
 
@@ -52,7 +57,7 @@ def predict_labels(tree, X):
 print("All generated trees and their training error rates:")
 for tree in generate_trees(k):
     predictions = predict_labels(tree, X_train)
-    current_error = error_rate(predictions, y_train)
+    current_error = error_rate(tree, X_train, y_train)
     print(f"Tree: {tree}, Training error rate: {current_error:.4f}")
 
 # Find the best tree within the desired structure on the training set
@@ -61,14 +66,14 @@ min_error = float('inf')
 
 for tree in generate_trees(k):
     predictions = predict_labels(tree, X_train)
-    current_error = error_rate(predictions, y_train)
+    current_error = error_rate(tree, X_train, y_train)
     if current_error < min_error:
         min_error = current_error
         best_tree = tree
 
 # Evaluate the best tree on the test set
 test_predictions = predict_labels(best_tree, X_test)
-test_error = error_rate(test_predictions, y_test)
+test_error = error_rate(best_tree, X_test, y_test)
 
 # Print results
 print("\nResults:")
