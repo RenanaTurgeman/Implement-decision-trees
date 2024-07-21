@@ -1,3 +1,5 @@
+import itertools
+
 import numpy as np
 from scipy.stats import entropy
 from collections import Counter
@@ -187,38 +189,42 @@ def construct_tree(features, labels, max_depth):
     return root
 
 
-def brute_force_method(available_features, depth, memo):
+def brute_force_method(feature_matrix, label_vector, max_depth, available_features):
     """
-        Enumerates all possible binary trees up to a given depth using the available features.
+    Enumerates all possible binary trees up to a given depth using the available features.
 
-        This function recursively generates all possible binary trees by combining features
-        at each level up to the specified depth. Each tree node is represented as a dictionary
-        containing keys 'feature', 'left', and 'right'.
+    This function recursively generates all possible binary trees by combining features
+    at each level up to the specified depth. Each tree node is represented as a dictionary
+    containing keys 'feature', 'left', and 'right'. It also calculates the error of the resulting
+    trees and returns the tree with the minimum error.
 
-        :param available_features: The features available for splitting nodes in the tree.
-        :param depth: The maximum depth of the trees to generate.
-        :param memo: A dictionary to memoize results of subtrees to avoid redundant calculations.
+    :param X: The feature matrix.
+    :param y: The target labels.
+    :param k: The maximum depth of the trees to generate.
+    :param available_features: A list or range of features available for splitting.
 
-        :returns: A list of dictionaries, each representing a binary tree.
-       """
+    :returns: The tree with the minimum error and the corresponding error value.
+    """
 
-    if depth == 0:
-        return [{"value": 0}, {"value": 1}]
-    if depth in memo:
-        return memo[depth]
+    best_tree = None
+    min_error = float('inf')
 
-    trees = []
-    for feature in available_features:
-        for left_depth in range(depth):
-            for right_depth in range(depth):
-                left_trees = brute_force_method(available_features, left_depth, memo)
-                right_trees = brute_force_method(available_features, right_depth, memo)
-                for left_tree in left_trees:
-                    for right_tree in right_trees:
-                        root = {"feature": feature, "left": left_tree, "right": right_tree}
-                        trees.append(root)
-    memo[depth] = trees
-    return trees
+    # Iterate over all possible combinations of features up to max_depth
+    for features_combination in itertools.combinations(available_features, max_depth):
+        # Create a feature subset matrix based on the selected features
+        selected_features = np.array(features_combination)
+        subset_feature_matrix = feature_matrix[:, selected_features]
+
+        # Construct the tree for the subset of features
+        tree = construct_tree(subset_feature_matrix, label_vector, max_depth)
+
+        # Compute the error of the constructed tree
+        tree_error = compute_error(tree, subset_feature_matrix, label_vector)
+        if tree_error < min_error:
+            min_error = tree_error
+            best_tree = tree
+
+    return best_tree, min_error
 
 
 def print_tree(tree, depth=0, is_left=None):
@@ -238,38 +244,31 @@ def print_tree(tree, depth=0, is_left=None):
     return result
 
 
+def load_data(file_name):
+    data = np.loadtxt(file_name, dtype=int)
+    feature_matrix = data[:, :-1]
+    label_vector = data[:, -1]
+    return feature_matrix, label_vector
+
+
 if __name__ == '__main__':
     # Load the vectors from the file
-    data_vectors = np.loadtxt('vectors.txt', dtype=int)
-
-    # Split the data into features and labels
-    feature_matrix = data_vectors[:, :-1]
-    label_vector = data_vectors[:, -1]
+    feature_matrix, label_vector = load_data('vectors.txt')
 
     # Parameters
     max_depth = 2  # because it goes over 0, 1, 2
     available_features = range(feature_matrix.shape[1])
 
     # Generate all possible trees of max_depth levels
-    memo = {}
-    possible_trees = brute_force_method(available_features, max_depth, memo)
-
-    # Find the tree with the smallest error
-    optimal_tree = None
-    smallest_error = float('inf')
-    for tree in possible_trees:
-        error = compute_error(tree, feature_matrix, label_vector)
-        if error < smallest_error:
-            smallest_error = error
-            optimal_tree = tree
+    best_tree, min_error = brute_force_method(feature_matrix, label_vector, max_depth, available_features)
 
     # Output the best tree and its error
     print("Results of Brute-Force Method:")
     print("Optimal Tree:")
-    print(print_tree(optimal_tree))
-    print(f"Brute-Force Smallest Error: {smallest_error:.4f}")
-    optimal_accuracy = (1 - smallest_error) * 100
-    print(f"Brute-Force Optimal Prediction Accuracy: {optimal_accuracy:.4f}%")
+    print(print_tree(best_tree))
+    print(f"Brute-Force Smallest Error: {min_error:.2f}")
+    optimal_accuracy = (1 - min_error) * 100
+    print(f"Brute-Force Optimal Prediction Accuracy: {optimal_accuracy:.2f}%")
 
     print("\nResults of Entropy Method:")
     # Construct entropy-based decision tree
@@ -280,5 +279,5 @@ if __name__ == '__main__':
 
     print("Binary Entropy Tree Structure:")
     print(print_tree(entropy_based_tree))
-    print(f"Binary Entropy Tree Error: {entropy_tree_error:.4f}")
-    print(f"Binary Entropy Tree Accuracy: {(1 - entropy_tree_error) * 100:.4f}%")
+    print(f"Binary Entropy Tree Error: {entropy_tree_error:.2f}")
+    print(f"Binary Entropy Tree Accuracy: {(1 - entropy_tree_error) * 100:.2f}%")
